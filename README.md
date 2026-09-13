@@ -1,106 +1,78 @@
-# SVM-Based Predictive Failure Maintenance
+# svm-predictive-maintenance
 
-A Soft Computing assignment on Support Vector Machines, applied to a real-world question: **can machine operating parameters distinguish normal operation from machine failure?**
+![python](https://img.shields.io/badge/python-3.9%2B-blue)
+![license](https://img.shields.io/badge/license-see%20LICENSE-lightgrey)
+![status](https://img.shields.io/badge/status-course%20project-orange)
 
-## Overview
+Can a Support Vector Machine tell a healthy machine from a failing one, using nothing but five sensor readings?
 
-This project connects SVM theory to predictive maintenance using the AI4I predictive-maintenance dataset. The workflow follows:
+That's the question this repo answers, end to end: load sensor data, pick honest features, deal with a 96/4 class imbalance, compare three SVM kernels, tune the winner, and be upfront about what got worse in the process.
 
-`raw data → dataset understanding → feature selection → train/test split → scaling → SVM training → kernel comparison → evaluation → hyperparameter tuning → optimized-model evaluation`
+## the pipeline
 
-## Dataset
+```
+raw data → inspect → select features → stratified split → standardize
+   → train {linear, poly, rbf} → evaluate → grid-search the rbf kernel
+   → re-evaluate → compare
+```
 
-- **Source:** AI4I predictive-maintenance dataset
-- **Size:** 10,000 observations, 14 columns
-- **Class distribution:** 96.61% no failure vs. 3.39% failure — a strongly imbalanced target
+## the data
 
-### Features used
+[AI4I 2020](https://archive.ics.uci.edu/dataset/601/ai4i+2020+predictive+maintenance+dataset) — 10,000 machine readings, 14 columns, 3.39% labeled as failures.
 
-Five continuous physical operating parameters were selected as a domain-informed baseline:
+Five continuous operating parameters go in as features:
 
-- Air temperature [K]
-- Process temperature [K]
-- Rotational speed [rpm]
-- Torque [Nm]
-- Tool wear [min]
+```
+Air temperature [K]  Process temperature [K]  Rotational speed [rpm]
+Torque [Nm]           Tool wear [min]
+```
 
-`UDI` and `Product ID` were excluded as identifiers. `TWF`, `HDF`, `PWF`, `OSF`, and `RNF` were excluded because they are directly associated with failure and would introduce target leakage. `Type` was left out of the baseline in favor of focusing on the five continuous variables.
+Two columns are dropped for being identifiers (`UDI`, `Product ID`), and five more (`TWF`, `HDF`, `PWF`, `OSF`, `RNF`) are dropped because they're derived from the failure label itself — training on them would be leakage, not prediction.
 
-**Target:** `Machine failure` (0 = no failure, 1 = failure)
+## results
 
-## Methodology
+Accuracy is nearly meaningless here — always predicting "normal" already gets you 96.6%. Precision/recall/F1 tell the real story:
 
-- **Train/test split:** 80/20 (8,000 / 2,000), stratified to preserve class proportions
-- **Scaling:** Standardization (`z = (x − μ) / σ`), fit on training data only
-- **Models compared:** Linear SVM, Polynomial SVM (degree 3), RBF SVM — all with `class_weight="balanced"`
-- **Hyperparameter tuning:** Grid search with 5-fold cross-validation over `C` and `gamma` for the RBF kernel, optimized for F1 score
-- **Evaluation:** Accuracy, precision, recall, F1-score, and confusion matrices — accuracy alone is misleading with a 3.39% failure rate
+| model            | accuracy | precision | recall  | f1     |
+|------------------|:--------:|:---------:|:-------:|:------:|
+| Linear SVM       | 82.8%    | 14.25%    | 80.88%  | 24.23% |
+| Polynomial SVM   | 90.3%    | 25.20%    | 94.12%  | 39.75% |
+| RBF SVM          | 91.3%    | 27.16%    | 92.65%  | 42.00% |
+| **Optimized RBF**| **95.2%**| **40.14%**| 83.82%  | **54.29%** |
 
-## Results
+*(Optimized RBF: `C=100, gamma="scale"`, found by 5-fold grid search on F1.)*
 
-### Baseline kernel comparison
+Tuning is not a free lunch. The optimized model raises accuracy, precision, and F1 by a wide margin, but recall drops from 92.65% → 83.82% — it now misses 11 failures instead of 5, out of 68. In a real deployment that trade-off would need a human decision, not just a leaderboard number.
 
-| Model          | Accuracy | Precision | Recall | F1 Score |
-|----------------|----------|-----------|--------|----------|
-| Linear SVM     | 82.8%    | 14.25%    | 80.88% | 24.23%   |
-| Polynomial SVM | 90.3%    | 25.20%    | 94.12% | 39.75%   |
-| RBF SVM        | 91.3%    | 27.16%    | 92.65% | 42.00%   |
+## quickstart
 
-RBF gave the strongest baseline overall. Its confusion matrix was `[[1763, 169], [5, 63]]` — 63 of 68 actual failures detected (92.65% recall).
+```bash
+git clone https://github.com/pedadarohan-dot/SVM---Based-Predictive-Failure-Maintenance
+cd SVM---Based-Predictive-Failure-Maintenance
+pip install -r requirements.txt
 
-### Optimized RBF (best C = 100, best gamma = "scale")
+# drop ai4i2020.csv in this directory, then:
+python train.py --data ai4i2020.csv
+```
 
-| Metric    | Result |
-|-----------|--------|
-| Accuracy  | 95.2%  |
-| Precision | 40.14% |
-| Recall    | 83.82% |
-| F1 Score  | 54.29% |
+Useful flags:
 
-Confusion matrix: `[[1847, 85], [11, 57]]` — 57 of 68 actual failures detected.
+```bash
+python train.py --data ai4i2020.csv --no-plots          # just the numbers
+python train.py --data ai4i2020.csv --save-plots out/   # write PNGs instead of showing windows
+```
 
-Tuning improved accuracy, precision, and F1-score, but recall dropped from 92.65% to 83.82%. This is a genuine precision/recall trade-off, not an unqualified improvement — the tuned model catches slightly fewer failures while raising far fewer false alarms.
-
-## What this project explored
-
-- Feature selection requires reasoning about identifiers, physical relevance, and target leakage, not just correlation.
-- Class imbalance makes raw accuracy an unreliable metric on its own.
-- SVM is a maximum-margin classifier; kernels (linear, polynomial, RBF) let it model varying degrees of nonlinearity.
-- `C` controls the penalty on classification errors; `gamma` controls how localized the RBF kernel's influence is.
-- Hyperparameter tuning shifts the precision/recall trade-off — it doesn't uniformly improve every metric.
-- Scikit-learn `Pipeline` parameter naming (`svc__C`, not `svc_C`) matters for `GridSearchCV`.
-
-The same conceptual pipeline (dataset → feature selection → train/test split → standardization → SVM training → kernel comparison → prediction → evaluation) was also reproduced in MATLAB to confirm the methodology outside Python.
-
-## Tech stack
-
-- Python, pandas, NumPy
-- scikit-learn (`SVC`, `GridSearchCV`, `Pipeline`, `StandardScaler`)
-- Matplotlib
-
-## Project structure
+## repo layout
 
 ```
 .
-├── app.py              # Full pipeline: data loading, EDA, SVM training, tuning, visualizations
-├── requirements.txt    # Python dependencies
+├── train.py           # the whole pipeline: data, models, tuning, plots
+├── requirements.txt
 └── README.md
 ```
 
-## Running it
+## what this project is (and isn't)
 
-1. Download the [AI4I 2020 Predictive Maintenance dataset](https://archive.ics.uci.edu/dataset/601/ai4i+2020+predictive+maintenance+dataset) and place `ai4i2020.csv` in the project root.
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Run the pipeline:
-   ```bash
-   python app.py
-   ```
+This started as a Soft Computing course assignment on SVM theory — the numerical margin/hyperplane derivation was done by hand before any code was written. The five features are a domain-informed baseline, not a claim that they're provably optimal, and the results above are exactly what the code produces, no cherry-picking. The same pipeline was also reproduced in MATLAB to check the methodology wasn't a scikit-learn artifact.
 
-The script prints dataset diagnostics and model metrics to the console, and displays five plots: class distribution, model comparison, the optimized model's confusion matrix, a false-positive/false-negative comparison, and a precision-recall scatter plot.
-
-## Notes
-
-This was built as a learning project for a Soft Computing course — the goal was to understand how SVM behaves on an imbalanced real-world classification problem, not to claim state-of-the-art results. The five selected features are a domain-informed baseline, not a claim of global feature optimality.
+It's a learning project, not a production failure-detection system — treat the numbers accordingly.

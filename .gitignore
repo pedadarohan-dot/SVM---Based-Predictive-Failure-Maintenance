@@ -1,0 +1,39 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data (large / raw dataset files — not tracked in the repo)
+*.csv
+ai4i2020.csv
+
+# Model artifacts
+*.pkl
+*.joblib
+
+# Plots generated at runtime
+*.png
+*.jpg
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Environment variables
+.env
